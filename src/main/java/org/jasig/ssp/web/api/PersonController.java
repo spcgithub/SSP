@@ -101,14 +101,23 @@ public class PersonController extends AbstractBaseController {
 	PagedResponse<PersonLiteTO> getAllCoaches(
 			final @RequestParam(required = false) ObjectStatus status,
 			final @RequestParam(required = false) Integer start,
-			final @RequestParam(required = false) Integer limit,
+			@RequestParam(required = false) Integer limit,
 			final @RequestParam(required = false) String sort,
 			final @RequestParam(required = false) String sortDirection) {
 
+		// We basically need coach reads to be unbounded given the current UI
+		if ( limit == null || limit <= 0 ) {
+			limit = SortingAndPaging.MAXIMUM_ALLOWABLE_RESULTS;
+		}
+		LOGGER.debug("Coach look params. Status: {}, Start: {}, Limit: {},"
+				+ " Sort: sort, SortDirection: {}",
+				new Object[] { status, start, limit, sort, sortDirection });
 		final PagingWrapper<CoachPersonLiteTO> coaches = service
 				.getAllCoachesLite(SortingAndPaging.createForSingleSort(status,
 						start, limit, sort, sortDirection, null));
 
+		LOGGER.debug("Returning {} of {} total coaches.",
+				coaches.getRows().size(), coaches.getResults());
 		return new PagedResponse<PersonLiteTO>(true, coaches.getResults(),
 				PersonLiteTO.toTOListFromCoachTOs(coaches.getRows()));
 
