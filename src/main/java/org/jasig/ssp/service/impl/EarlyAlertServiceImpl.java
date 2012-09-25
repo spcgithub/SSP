@@ -1,11 +1,11 @@
 package org.jasig.ssp.service.impl; // NOPMD by jon.adams
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import javax.mail.SendFailedException;
 import javax.validation.constraints.NotNull;
 
