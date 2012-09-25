@@ -1,11 +1,11 @@
 package org.jasig.ssp.service.impl; // NOPMD by jon.adams
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import javax.mail.SendFailedException;
 import javax.validation.constraints.NotNull;
 
@@ -16,19 +16,27 @@ import org.jasig.ssp.model.EarlyAlertRouting;
 import org.jasig.ssp.model.Message;
 import org.jasig.ssp.model.ObjectStatus;
 import org.jasig.ssp.model.Person;
+import org.jasig.ssp.model.PersonProgramStatus;
 import org.jasig.ssp.model.SubjectAndBody;
+import org.jasig.ssp.model.external.FacultyCourse;
+import org.jasig.ssp.model.external.Term;
 import org.jasig.ssp.model.reference.EarlyAlertReason;
 import org.jasig.ssp.model.reference.EarlyAlertSuggestion;
+import org.jasig.ssp.model.reference.ProgramStatus;
 import org.jasig.ssp.service.AbstractPersonAssocAuditableService;
 import org.jasig.ssp.service.EarlyAlertRoutingService;
 import org.jasig.ssp.service.EarlyAlertService;
 import org.jasig.ssp.service.MessageService;
 import org.jasig.ssp.service.ObjectNotFoundException;
+import org.jasig.ssp.service.PersonProgramStatusService;
 import org.jasig.ssp.service.PersonService;
+import org.jasig.ssp.service.external.FacultyCourseService;
+import org.jasig.ssp.service.external.TermService;
 import org.jasig.ssp.service.reference.ConfigService;
 import org.jasig.ssp.service.reference.EarlyAlertReasonService;
 import org.jasig.ssp.service.reference.EarlyAlertSuggestionService;
 import org.jasig.ssp.service.reference.MessageTemplateService;
+import org.jasig.ssp.service.reference.ProgramStatusService;
 import org.jasig.ssp.util.sort.PagingWrapper;
 import org.jasig.ssp.util.sort.SortingAndPaging;
 import org.jasig.ssp.web.api.validation.ValidationException;
@@ -76,6 +84,18 @@ public class EarlyAlertServiceImpl extends // NOPMD
 	@Autowired
 	private transient PersonService personService;
 
+	@Autowired
+	private transient FacultyCourseService facultyCourseService;
+
+	@Autowired
+	private transient TermService termService;
+
+	@Autowired
+	private transient PersonProgramStatusService personProgramStatusService;
+
+	@Autowired
+	private transient ProgramStatusService programStatusService;
+
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(EarlyAlertServiceImpl.class);
 
@@ -111,6 +131,8 @@ public class EarlyAlertServiceImpl extends // NOPMD
 				|| assignedAdvisor.equals(student.getCoach().getId())) {
 			student.setCoach(personService.get(assignedAdvisor));
 		}
+
+		ensureValidAlertedOnPersonStateNoFail(student);
 
 		// Create alert
 		final EarlyAlert saved = getDao().save(earlyAlert);
@@ -229,6 +251,44 @@ public class EarlyAlertServiceImpl extends // NOPMD
 		// getEarlyAlertAdvisor should never return null
 		throw new ValidationException(
 				"Could not determined the Early Alert Coordinator for this student. Ensure that a default coordinator is set globally and for all campuses.");
+	}
+
+	private void ensureValidAlertedOnPersonStateNoFail(Person person) {
+		try {
+			ensureValidAlertedOnPersonStateOrFail(person);
+		} catch ( Exception e ) {
+			LOGGER.error("Unable to set a program status on person '{}'. This is"
+					+ " likely to prevent that person record from appearing"
+					+ " in caseloads and student searches.", person.getId());
+		}
+	}
+
+	private void ensureValidAlertedOnPersonStateOrFail(Person person)
+			throws ObjectNotFoundException, ValidationException {
+
+		if ( person.getObjectStatus() != ObjectStatus.ACTIVE ) {
+			person.setObjectStatus(ObjectStatus.ACTIVE);
+		}
+
+		final ProgramStatus programStatus =  programStatusService.getActiveStatus();
+		if ( programStatus == null ) {
+			throw new ObjectNotFoundException(
+					"Unable to find a ProgramStatus representing \"activeness\".",
+					"ProgramStatus");
+		}
+
+		Set<PersonProgramStatus> programStatuses =
+				person.getProgramStatuses();
+		if ( programStatuses == null || programStatuses.isEmpty() ) {
+			PersonProgramStatus personProgramStatus = new PersonProgramStatus();
+			personProgramStatus.setEffectiveDate(new Date());
+			personProgramStatus.setProgramStatus(programStatus);
+			personProgramStatus.setPerson(person);
+			programStatuses.add(personProgramStatus);
+			person.setProgramStatuses(programStatuses);
+			// save should cascade, but make sure custom create logic fires
+			personProgramStatusService.create(personProgramStatus);
+		}
 	}
 
 	/**
@@ -414,6 +474,52 @@ public class EarlyAlertServiceImpl extends // NOPMD
 		}
 
 		final Map<String, Object> templateParameters = Maps.newHashMap();
+
+		final String courseName = earlyAlert.getCourseName();
+		if ( StringUtils.isNotBlank(courseName) ) {
+			final String facultySchoolId = earlyAlert.getCreatedBy().getSchoolId();
+			if ( (StringUtils.isNotBlank(facultySchoolId)) ) {
+				FacultyCourse course = null;
+				try {
+					course = facultyCourseService.
+							getCourseByFacultySchoolIdAndFormattedCourse(
+									facultySchoolId, courseName);
+				} catch ( ObjectNotFoundException e ) {
+					// Trace irrelevant. see below for logging. prefer to
+					// do it there, after the null check b/c not all service
+					// methods implement ObjectNotFoundException reliably.
+				}
+				if ( course != null ) {
+					templateParameters.put("course", course);
+					String termCode = course.getTermCode();
+					if ( StringUtils.isNotBlank(termCode) ) {
+						Term term = null;
+						try {
+							term = termService.getByCode(termCode);
+						} catch ( ObjectNotFoundException e ) {
+							// Trace irrelevant. See below for logging.
+						}
+						if ( term != null ) {
+							templateParameters.put("term", term);
+						} else {
+							LOGGER.info("Not adding term to message template"
+									+ " params or early alert {} because"
+									+ " the term code {} did not resolve to"
+									+ " an external term record",
+									earlyAlert.getId(), termCode);
+						}
+					}
+				} else {
+					LOGGER.info("Not adding course nor term to message template"
+							+ " params for early alert {} because the associated"
+							+ " course {} and faculty school id {} did not"
+							+ " resolve to an external course record.",
+							new Object[] { earlyAlert.getId(), courseName,
+									facultySchoolId});
+				}
+			}
+		}
+
 		templateParameters.put("earlyAlert", earlyAlert);
 		templateParameters.put("termToRepresentEarlyAlert",
 				configService.getByNameEmpty("term_to_represent_early_alert"));

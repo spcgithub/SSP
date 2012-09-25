@@ -18,13 +18,7 @@ public class WithTransactionImpl implements WithTransaction {
 	@Override
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public <T> T withNewTransactionAndUncheckedExceptions(Callable<T> work) {
-		try {
-			return doWork(work);
-		} catch ( RuntimeException e ) {
-			throw e;
-		} catch ( Exception e ) {
-			throw new RuntimeException(e);
-		}
+		return doWorkUnchecked(work);
 	}
 
 	@Override
@@ -33,7 +27,23 @@ public class WithTransactionImpl implements WithTransaction {
 		return doWork(work);
 	}
 
+	@Override
+	@Transactional
+	public <T> T withTransactionAndUncheckedExceptions(Callable<T> work) {
+		return doWorkUnchecked(work);
+	}
+
 	private <T> T doWork(Callable<T> work) throws Exception  {
 		return work.call();
+	}
+
+	private <T> T doWorkUnchecked(Callable<T> work) {
+		try {
+			return doWork(work);
+		} catch ( RuntimeException e ) {
+			throw e;
+		} catch ( Exception e ) {
+			throw new RuntimeException(e);
+		}
 	}
 }

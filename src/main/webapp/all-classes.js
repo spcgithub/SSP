@@ -866,7 +866,8 @@ Ext.define('Ssp.model.util.TreeRequest', {
              {name: 'expanded', type:'boolean',defaultValue: false},
              {name: 'expandable', type:'boolean', defaultValue: true},
              {name: 'callbackFunc',type:'auto'},
-             {name: 'callbackScope', type: 'auto'}]
+             {name: 'callbackScope', type: 'auto'},
+             {name: 'removeParentWhenNoChildrenExist', type: 'boolean', defaultValue: false}]
 });
 Ext.define('Ssp.model.Configuration', {
     extend: 'Ext.data.Model',
@@ -924,7 +925,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'studentIdMinValidationLength', 
     	      type: 'number', 
-    	      defaultValue: 3
+    	      defaultValue: 1
     	     },
     	     /*
     	      * Error message for a studentId/schoolId that exceeds the specified minimum validation length.
@@ -938,7 +939,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'studentIdMaxValidationLength', 
        	      type: 'number', 
-       	      defaultValue: 8
+       	      defaultValue: 64
        	     },
     	     /*
     	      * Error message for a studentId/schoolId that exceeds the specified maximum validation length.
@@ -2210,7 +2211,7 @@ Ext.define('Ssp.util.ColumnRendererUtils',{
 	},
 
 	renderCreatedByDateWithTime: function(val, metaData, record) {
-	    return Ext.util.Format.date( record.get('createdDate'),'m/d/Y h:m A');		
+	    return Ext.util.Format.date( record.get('createdDate'),'m/d/Y g:i A');		
 	},	
 
 	renderCreatedBy: function(val, metaData, record) {
@@ -2455,6 +2456,7 @@ Ext.define('Ssp.util.TreeRendererUtils',{
     	var expandable = treeRequest.get('expandable');
     	var callbackFunc = treeRequest.get('callbackFunc');
     	var callbackScope = treeRequest.get('callbackScope');
+    	var removeParentWhenNoChildrenExist = treeRequest.get('removeParentWhenNoChildrenExist');
     	// retrieve items
 		me.apiProperties.makeRequest({
 			url: me.apiProperties.createUrl( url ),
@@ -2470,6 +2472,10 @@ Ext.define('Ssp.util.TreeRendererUtils',{
 		    		me.appendChildren( nodeToAppendTo, nodes);
 		    	}else{
 		    		me.appendChildren( nodeToAppendTo, []);
+		    		if (removeParentWhenNoChildrenExist==true)
+		    		{
+		    			nodeToAppendTo.remove(true);
+		    		}
 		    	}
 		    	
 	    		if (callbackFunc != null && callbackFunc != "")
@@ -4058,6 +4064,7 @@ Ext.define('Ssp.service.PersonService', {
 	    	{
 		    	r = Ext.decode(response.responseText);	    		
 	    	}
+			r = me.superclass.filterInactiveChildren( [ r ] )[0];
 	    	callbacks.success( r, callbacks.scope );
 	    };
 
@@ -4087,6 +4094,7 @@ Ext.define('Ssp.service.PersonService', {
 		    		r = Ext.decode(response.responseText);
 		    	}		    		
 	    	}
+			r = me.superclass.filterInactiveChildren( [ r ] )[0];
 	    	callbacks.success( r, callbacks.scope );
 	    };
 
@@ -4109,31 +4117,35 @@ Ext.define('Ssp.service.PersonService', {
     	var me=this;
     	var id=jsonData.id;
         var url = me.getBaseUrl();
+
 	    var success = function( response, view ){
-	    	var r = Ext.decode(response.responseText);
-			callbacks.success( r, callbacks.scope );
+			var r = response.responseText ? Ext.decode(response.responseText) : null;
+			if ( callbacks.statusCode[response.status] ) {
+				callbacks.statusCode[response.status](r, callbacks.scope);
+			} else {
+				callbacks.success(r, callbacks.scope);
+			}
 	    };
 
 	    var failure = function( response ){
 	    	var r;
-	    	// handle unique schoolId error display in a more
-	    	// user friendly fashion
-	    	/*
-	    	if ( response.responseText != null)
-	    	{
-	    		r = Ext.decode(response.responseText);
-	    		if (r.message.indexOf('ERROR: duplicate key value violates unique constraint \"uq_person_school_id\"') == 0)
-	    		{
-	    			Ext.Msg.alert("SSP Error","The " + me.sspConfig.get('studentIdAlias') + " you entered already exists in the system. Please double-check and try again.");
-	    		}
-	    	}else{
-		    	    		
-	    	}
-	    	*/
-	    	me.apiProperties.handleError( response );
-	    	callbacks.failure( response, callbacks.scope );	
+			// Before statusCode callbacks were introduced, "legacy" failure
+			// callbacks expected unparsed responses, whereas legacy success
+			// callbacks expected parsed responses. Also, legacy failure
+			// callbacks all assumed the PersonService handled error dialog
+			// rendering. If a statusCode-specific callback exists, though,
+			// we assume the view wants to perform very specific work on that
+			// particular error type so we skip the dialog rendering here.
+			// (Dialog rendering is the default behavior in
+			// me.apiProperties.handleError( response );)
+			if ( callbacks.statusCode[response.status] ) {
+				callbacks.statusCode[response.status](response, callbacks.scope);
+			} else {
+				me.apiProperties.handleError( response );
+				callbacks.failure(response, callbacks.scope);
+			}
 	    };
-        
+
     	// save the person
 		if (id=="")
 		{
@@ -5205,7 +5217,14 @@ Ext.define('Ssp.controller.SearchViewController', {
     			break;
     			
     		case 'transition':
-    	     	 me.appEventsController.getApplication().fireEvent('transitionStudent');
+    	     	/* 
+    	     	 * Temp fix for SSP-434
+    	     	 * 
+    	     	 * Temporarily removing Transition Action from this button.
+    			 * TODO: Ensure that this button takes the user to the Journal Tool and initiates a
+    			 * Journal Entry.
+    			 * // me.appEventsController.getApplication().fireEvent('transitionStudent');
+    	     	 */
     	     	 break;
     	     	 
     		case 'non-participating':
@@ -5553,13 +5572,9 @@ Ext.define('Ssp.controller.person.CaseloadAssignmentViewController', {
     
 	init: function() {
 		var me=this;
+		me.resetAppointmentModels();
+
 		var id = me.personLite.get('id');
-		// initialize the appointment and personAppointment
-		var personAppointment = new Ssp.model.PersonAppointment();
-		var appointment = new Ssp.model.Appointment();
-		me.appointment.data = appointment.data;
-		me.currentPersonAppointment.data = personAppointment.data;
-		
 		// load the person record and init the view
 		if (id.length > 0)
 		{
@@ -5577,6 +5592,15 @@ Ext.define('Ssp.controller.person.CaseloadAssignmentViewController', {
 		
 		return this.callParent(arguments);
     },
+
+	resetAppointmentModels: function() {
+		var me=this;
+		// initialize the appointment and personAppointment
+		var personAppointment = new Ssp.model.PersonAppointment();
+		var appointment = new Ssp.model.Appointment();
+		me.appointment.data = appointment.data;
+		me.currentPersonAppointment.data = personAppointment.data;
+	},
     
     destroy: function(){
 		this.appEventsController.removeEvent({eventName: 'studentNameChange', callBackFunc: this.onPersonNameChange, scope: this});    
@@ -5671,6 +5695,12 @@ Ext.define('Ssp.controller.person.CaseloadAssignmentViewController', {
     
     onSaveClick: function(button){
 		var me=this;
+		me.doSave();
+	},
+
+	// record saving heavy-lifting, independent of any particular event
+	doSave: function() {
+		var me=this;
 		var model=me.person;
 		var id = model.get('id');
 		var jsonData = new Object();
@@ -5734,26 +5764,17 @@ Ext.define('Ssp.controller.person.CaseloadAssignmentViewController', {
 			// set special service groups
 			specialServiceGroupsFormValues = specialServiceGroupsItemSelector.getValue();
 			selectedSpecialServiceGroups = me.getSelectedItemSelectorIdsForTransfer(specialServiceGroupsFormValues);
-			if (selectedSpecialServiceGroups.length > 0)
-			{
-				model.set('specialServiceGroups', selectedSpecialServiceGroups);
-			}
+			model.set('specialServiceGroups', selectedSpecialServiceGroups);
 
 			// referral sources
 			referralSourcesFormValues = referralSourcesItemSelector.getValue();
 			selectedReferralSources = me.getSelectedItemSelectorIdsForTransfer(referralSourcesFormValues);
-			if (selectedReferralSources.length > 0)
-			{			
-			   model.set('referralSources', selectedReferralSources);
-			}
+			model.set('referralSources', selectedReferralSources);
 			
 			// set the service reasons
 			serviceReasonsFormValues = serviceReasonsForm.getValues();
 			selectedServiceReasons = me.formUtils.getSelectedIdsAsArray( serviceReasonsFormValues );
-			if (selectedServiceReasons.length > 0)
-			{
-				model.set('serviceReasons', selectedServiceReasons);
-			}
+			model.set('serviceReasons', selectedServiceReasons);
 						
 			me.getView().setLoading( true );
 			
@@ -5762,7 +5783,10 @@ Ext.define('Ssp.controller.person.CaseloadAssignmentViewController', {
 			
 			me.personService.save( jsonData, 
 	    			               {success:me.savePersonSuccess, 
-				                    failure:me.savePersonFailure, 
+				                    failure:me.savePersonFailure,
+				                    statusCode: {
+				                      409: me.savePersonConflict
+				                    },
 				                    scope: me} );
 
 		}else{
@@ -5804,6 +5828,101 @@ Ext.define('Ssp.controller.person.CaseloadAssignmentViewController', {
     	var me=scope;
     	me.getView().setLoading( false );
     },
+
+	savePersonConflict: function( response, scope ) {
+		var me=scope;
+		me.savePersonFailure(response, scope);
+		var dialogOpts = {
+			buttons: Ext.Msg.YESNOCANCEL,
+			icon: Ext.Msg.WARNING,
+			fn: me.resolvePersonConflict,
+			scope: me
+		};
+		var model=me.person;
+		var id = model.get('id');
+		if ( id ) {
+			dialogOpts.title = "Conflicting Student Record Updates";
+			dialogOpts.msg = "Your changes did not save because another user" +
+				" modified the student record while you were filling out" +
+				" this form. Do you want to save your changes anyway?<br/><br/>" +
+				"Press 'Yes' to overwrite the existing record with your changes.<br/>" +
+				"Press 'No' to discard your changes and load the existing record into this form.<br/>" +
+				"Press 'Cancel' to do nothing and resume editing.";
+		} else {
+			var conflictingPersonId = me.parseConflictingPersonId(response);
+			if ( conflictingPersonId ) {
+				dialogOpts.title = "Student Already on File";
+				dialogOpts.msg = "The student record did not save because another" +
+					" student record already exists for the specified external" +
+					" identifier. Do you want to save your changes anyway?<br/><br/>" +
+					"Press 'Yes' to overwrite the existing record with your changes.<br/>" +
+					"Press 'No' to discard your changes and load the existing record into this form.<br/>" +
+					"Press 'Cancel' to do nothing and resume editing.";
+				dialogOpts.personId = conflictingPersonId;
+			} else {
+				dialogOpts.buttons = Ext.Msg.OK;
+				dialogOptsicon = Ext.Msg.ERROR;
+				dialogOpts.fn = function() {
+					// no-op
+				};
+				dialogOpts.title = "Unresolvable Student Record Conflict";
+				dialogOpts.msg = "Your changes could not be saved because" +
+					" they conflict with an existing student record but the" +
+					" exact cause of the conflict could not be determined.<br/><br/>" +
+					" Either contact your system administrator or try" +
+					" searching for an existing student record with the" +
+					" same name and/or identifier.";
+			}
+		}
+		Ext.Msg.show(dialogOpts);
+	},
+
+	parseConflictingPersonId: function(response) {
+		var me=this;
+		if ( !(response.responseText) ) {
+			return null;
+		}
+		var parsedResponseText = Ext.decode(response.responseText);
+		var responseDetail = parsedResponseText.detail;
+		if ( !(responseDetail) ) {
+			return null;
+		}
+		var attemptedLookupTypeInfo = responseDetail.typeInfo;
+		if ( !(attemptedLookupTypeInfo) ) {
+			return null;
+		}
+		var attemptedLookupType = attemptedLookupTypeInfo.name;
+		if ( !(attemptedLookupType) || "org.jasig.ssp.model.Person" !== attemptedLookupType ) {
+			return null;
+		}
+		var lookupFields = responseDetail.lookupFields;
+		if ( !(lookupFields) ) {
+			return null;
+		}
+		return lookupFields.id || null;
+	},
+
+	resolvePersonConflict: function(buttonId, text, opt) {
+		var me=this;
+		var model;
+		if (buttonId === "yes") {
+			model=me.person;
+			var id = model.set('id', opt.personId);
+			me.doSave();
+		} else if ( buttonId === "no" ) {
+			// Basically the same thing that SearchViewController.js does
+			// to launch the edit form. (Would be a huge patch to get each
+			// individual form to reset/reload itself so we just reload the
+			// entire view.)
+			model = new Ssp.model.Person();
+			me.person.data = model.data;
+			me.personLite.set('id', opt.personId);
+			me.resetAppointmentModels();
+			var comp = this.formUtils.loadDisplay('mainview', 'caseloadassignment', true, {flex:1});
+		} else {
+			// nothing to do
+		}
+	},
 
     
     saveProgramStatusSuccess: function( r, scope ){
@@ -6261,16 +6380,86 @@ Ext.define('Ssp.controller.person.SpecialServiceGroupsViewController', {
 	            valueField: 'id',
 	            value: ((selectedSpecialServiceGroups.length>0) ? selectedSpecialServiceGroups : [] ),
 	            allowBlank: true,
-	            buttons: ["add", "remove"]
+	            buttons: ["add", "remove"],
+				listeners: {
+					toField: {
+						boundList: {
+							scope: me,
+							drop: me.maybeRefireFromFieldLoadWithNonEmptyStore
+						}
+					},
+					fromField: {
+						boundList: {
+							scope: me,
+							itemdblclick: me.maybeRefireFromFieldLoadWithNonEmptyStore
+
+						}
+					}
+				}
 	        }];
-    		
     		view.add(items);
+			me.registerAdditionalListeners();
     	}
 	},
 	
     getAllFailure: function( response, scope ){
     	var me=scope;  	
-    }
+    },
+
+	// Drops, double clicks and button clicks have to be handled separately -
+	// there's no single event they both fire from ItemSelector to indicate that
+	// a selection has been updated. But they both have the same problem when
+	// selecting the last item in the "fromField" (see below). Drop handlers are
+	// registered with standard view config above. Button registration is a
+	// little bit different and is handled here. Note that you can't just
+	// replace itemSelector.onAddBtnClick b/c that method is registered as the
+	// button handler when the button is created, so the button won't see your
+	// replacement.
+	registerAdditionalListeners: function() {
+		var me = this;
+		var itemSelector = me.findItemSelector();
+		var addButton = itemSelector.query('button[iconCls=x-form-itemselector-add]')[0];
+		var origAddButtonHandler = addButton.handler;
+		addButton.setHandler(function() {
+			var me = this;
+			origAddButtonHandler.apply(itemSelector);
+			me.maybeRefireFromFieldLoadWithNonEmptyStore();
+		}, me);
+	},
+
+	// Hack to work around a bug in ItemSelector.setValue() which prevents
+	// selecting the last item in the "fromField". The fromField's store count
+	// is decremented immediately when an item is selected, but setValue(),
+	// which is called after that decrement, assumes the fromField store is
+	// uninitialized if that decrement results in an empty fromField store. In
+	// that case it just registers a 'load' event listener on the store and
+	// returns. The early return prevents the ItemSelector from seeing an
+	// updated list of selected items.
+	maybeRefireFromFieldLoadWithNonEmptyStore: function() {
+		var me = this;
+		var itemSelector = me.findItemSelector();
+		var fromField = me.itemSelector.fromField;
+		var toField = me.itemSelector.toField;
+		var origGetCount = fromField.store.getCount;
+		// this is safe b/c we don't even start to initialize the view
+		// until after the store has been initialized, which obviates the guard
+		// against uninitialized fromField stores in ItemSelector.setValue()
+		if ( origGetCount.apply(fromField.store) === 0 ) {
+			fromField.store.getCount = function() { return 1; };
+			fromField.store.fireEvent('load', fromField.store);
+			fromField.store.getCount = origGetCount;
+		}
+	},
+
+	// Factored into method rather than inlined in getAllSuccess() b/c we need
+	// to be able to find the iterm selector component when callbacks/listeners
+	// fire, which could theoretically happen before getAllSuccess() could cache
+	// this result
+	findItemSelector: function() {
+		var me = this;
+		me.itemSelector = me.itemSelect ||  me.getView().form.findField("specialServiceGroups");
+		return me.itemSelector;
+	}
 });
 Ext.define('Ssp.controller.person.ReferralSourcesViewController', {
     extend: 'Deft.mvc.ViewController',
@@ -6315,16 +6504,65 @@ Ext.define('Ssp.controller.person.ReferralSourcesViewController', {
 	            valueField: 'id',
 	            value: ((selectedReferralSources.length>0) ? selectedReferralSources : [] ),
 	            allowBlank: true,
-	            buttons: ["add", "remove"]
+	            buttons: ["add", "remove"],
+				listeners: {
+					toField: {
+						boundList: {
+							scope: me,
+							drop: me.maybeRefireFromFieldLoadWithNonEmptyStore
+						}
+					},
+					fromField: {
+						boundList: {
+							scope: me,
+							itemdblclick: me.maybeRefireFromFieldLoadWithNonEmptyStore
+
+						}
+					}
+				}
 	        }];
-    		
     		view.add(items);
+			me.registerAdditionalListeners();
     	}
 	},
 	
     getAllFailure: function( response, scope ){
     	var me=scope;  	
-    }
+    },
+
+	// TODO abstract copy/paste from SpecialServiceGroupsViewController.js
+	registerAdditionalListeners: function() {
+		var me = this;
+		var itemSelector = me.findItemSelector();
+		var addButton = itemSelector.query('button[iconCls=x-form-itemselector-add]')[0];
+		var origAddButtonHandler = addButton.handler;
+		addButton.setHandler(function() {
+			var me = this;
+			origAddButtonHandler.apply(itemSelector);
+			me.maybeRefireFromFieldLoadWithNonEmptyStore();
+		}, me);
+	},
+
+	// TODO abstract copy/paste from SpecialServiceGroupsViewController.js
+	maybeRefireFromFieldLoadWithNonEmptyStore: function() {
+		var me = this;
+		var itemSelector = me.findItemSelector();
+		var fromField = me.itemSelector.fromField;
+		var toField = me.itemSelector.toField;
+		var origGetCount = fromField.store.getCount;
+		if ( origGetCount.apply(fromField.store) === 0 ) {
+			fromField.store.getCount = function() { return 1; };
+			fromField.store.fireEvent('load', fromField.store);
+			fromField.store.getCount = origGetCount;
+		}
+	},
+
+	// TODO abstract copy/paste from SpecialServiceGroupsViewController.js
+	findItemSelector: function() {
+		var me = this;
+		me.itemSelector = me.itemSelect ||  me.getView().form.findField("referralSources");
+		return me.itemSelector;
+	}
 });
 Ext.define('Ssp.controller.person.ServiceReasonsViewController', {
     extend: 'Deft.mvc.ViewController',
@@ -8672,6 +8910,13 @@ Ext.define('Ssp.controller.tool.journal.EditJournalViewController', {
     control: {
     	entryDateField: '#entryDateField',
     	
+    	removeJournalTrackButton: {
+    		selector: '#removeJournalTrackButton',
+    		listeners: {
+    			click: 'onRemoveJournalTrackButtonClick'
+    		}
+    	},
+    	
     	journalTrackCombo: {
     		selector: '#journalTrackCombo',
     		listeners: {
@@ -8807,7 +9052,7 @@ Ext.define('Ssp.controller.tool.journal.EditJournalViewController', {
     			{
     				jsonData.journalEntryDetails = record.clearGroupedDetails( jsonData.journalEntryDetails );
     			}
-    			    			
+    			
     			me.getView().setLoading( true );
     			
     			me.journalEntryService.save( me.personLite.get('id'), jsonData, {
@@ -8849,20 +9094,23 @@ Ext.define('Ssp.controller.tool.journal.EditJournalViewController', {
 	},	
 	
 	onJournalTrackComboSelect: function(comp, records, eOpts){
-    	if (records.length > 0)
+		var me=this;
+		if (records.length > 0)
     	{
-    		this.model.set('journalTrack',{"id": records[0].get('id')});
+    		me.model.set('journalTrack',{"id": records[0].get('id')});
     		
     		// the inited property prevents the
     		// Journal Entry Details from clearing
     		// when the ViewController loads, so the details only 
     		// clear when a new journal track is selected
     		// because the init for the view sets the combo
-    		if (this.inited==true)
+    		if (me.inited==true)
     		{
-    	   		this.model.removeAllJournalEntryDetails();
-    			this.appEventsController.getApplication().fireEvent('refreshJournalEntryDetails');    			
+    	   		me.model.removeAllJournalEntryDetails();
+    			me.appEventsController.getApplication().fireEvent('refreshJournalEntryDetails');    			
     		}
+     	}else{
+     		me.removeJournalTrackAndSessionDetails();
      	}
 	},
 	
@@ -8870,10 +9118,26 @@ Ext.define('Ssp.controller.tool.journal.EditJournalViewController', {
 		var me=this;
     	if (comp.getValue() == "")
     	{
-     		me.model.set("journalTrack","");
-     		me.model.removeAllJournalEntryDetails();
-     		me.appEventsController.getApplication().fireEvent('refreshJournalEntryDetails');    			
+     		me.removeJournalTrackAndSessionDetails();
      	}		
+	},
+	
+	removeJournalTrackAndSessionDetails: function(){
+ 		var me=this;
+		me.model.set("journalTrack","");
+ 		me.model.removeAllJournalEntryDetails();
+ 		me.appEventsController.getApplication().fireEvent('refreshJournalEntryDetails');
+	},
+	
+	onRemoveJournalTrackButtonClick: function( button ){
+		var me=this;
+		var combo = me.getJournalTrackCombo();
+		combo.clearValue();
+		combo.fireEvent('select',{
+			combo: combo,
+			records: [],
+			eOpts: {}
+		});
 	},
 	
 	onCommentChange: function(comp, newValue, oldValue, eOpts){
@@ -8990,7 +9254,7 @@ Ext.define('Ssp.controller.tool.journal.TrackTreeViewController', {
 		if (journalTrackId != null && journalTrackId != "")
 		{
 			var treeRequest = new Ssp.model.util.TreeRequest();
-	    	treeRequest.set('url', this.journalTrackUrl + '/'+ journalTrackId + '/journalStep');
+	    	treeRequest.set('url', this.journalTrackUrl + '/'+ journalTrackId + '/journalStep?sort=name');
 	    	treeRequest.set('nodeType','journalStep');
 	    	treeRequest.set('isLeaf', false);
 	    	treeRequest.set('enableCheckedItems', false);
@@ -9015,13 +9279,14 @@ Ext.define('Ssp.controller.tool.journal.TrackTreeViewController', {
     	if (url != "")
     	{
         	var treeRequest = new Ssp.model.util.TreeRequest();
-        	treeRequest.set('url', url + '/' + id + '/journalStepDetail');
+        	treeRequest.set('url', url + '/' + id + '/journalStepDetail?sort=name');
         	treeRequest.set('nodeType', 'journalDetail');
         	treeRequest.set('isLeaf', true);
         	treeRequest.set('nodeToAppendTo', node);
         	treeRequest.set('enableCheckedItems',true);
 	    	treeRequest.set('callbackFunc',me.afterJournalDetailsLoaded);
 	    	treeRequest.set('callbackScope',me);
+	    	treeRequest.set('removeParentWhenNoChildrenExist',true);
     		me.treeUtils.getItems( treeRequest );
     	}
     },
@@ -11955,11 +12220,11 @@ Ext.define('Ssp.view.Search', {
 		    			    action: 'active',
 		    			    itemId: 'setActiveStatusButton'
 			    		},{
-		    			    tooltip: 'Transition Student',
+		    			    tooltip: 'Set Student to Transitioned status',
 		    			    text: '',
 		    			    width: 25,
 		    			    height: 25,
-		    			    hidden: !me.authenticatedPerson.hasAccess('SET_TRANSITION_STATUS_BUTTON'),
+		    			    hidden: true, // Temp fix for SSP-434: !me.authenticatedPerson.hasAccess('SET_TRANSITION_STATUS_BUTTON')
 		    			    cls: 'setTransitionStatusIcon',
 		    			    xtype: 'button',
 		    			    action: 'transition',
@@ -14018,7 +14283,7 @@ Ext.define('Ssp.view.tools.journal.Journal', {
 	    		                { header: 'Date',  
 		    		                  dataIndex: 'entryDate',
 		    		                  flex: 1,
-		    		                  renderer: Ext.util.Format.dateRenderer('m/d/Y')
+		    		                  renderer: Ext.util.Format.dateRenderer('m/d/Y g:i A')
 	    		                },
 	    		                { header: 'Entered By',  
 	    		                  dataIndex: 'createdBy',
@@ -14065,12 +14330,14 @@ Ext.define('Ssp.view.tools.journal.EditJournal',{
         model: 'currentJournalEntry'
     },	
     initComponent: function() {
-    	Ext.applyIf(this, {
-        	title: ((this.model.get('id') == "") ? "Add Journal" : "Edit Journal"),
+    	var me=this;
+    	Ext.applyIf(me, {
+        	title: ((me.model.get('id') == "") ? "Add Journal" : "Edit Journal"),
         	autoScroll: true,
         	defaults: {
             	labelWidth: 150,
-            	padding: 5
+            	padding: 5,
+            	labelAlign: 'right'
             },
         	items: [{
 			    	xtype: 'datefield',
@@ -14085,7 +14352,7 @@ Ext.define('Ssp.view.tools.journal.EditJournal',{
 			        name: 'confidentialityLevelId',
 			        fieldLabel: 'Confidentiality Level',
 			        emptyText: 'Select One',
-			        store: this.confidentialityLevelsStore,
+			        store: me.confidentialityLevelsStore,
 			        valueField: 'id',
 			        displayField: 'name',
 			        mode: 'local',
@@ -14100,7 +14367,7 @@ Ext.define('Ssp.view.tools.journal.EditJournal',{
 			        name: 'journalSourceId',
 			        fieldLabel: 'Source',
 			        emptyText: 'Select One',
-			        store: this.journalSourcesStore,
+			        store: me.journalSourcesStore,
 			        valueField: 'id',
 			        displayField: 'name',
 			        mode: 'local',
@@ -14110,40 +14377,57 @@ Ext.define('Ssp.view.tools.journal.EditJournal',{
 			        forceSelection: true,
 			        anchor: '95%'
 				},{
-			        xtype: 'combobox',
-			        itemId: 'journalTrackCombo',
-			        name: 'journalTrackId',
-			        fieldLabel: 'Journal Track',
-			        emptyText: 'Select One',
-			        store: this.journalTracksStore,
-			        valueField: 'id',
-			        displayField: 'name',
-			        mode: 'local',
-			        typeAhead: true,
-			        queryMode: 'local',
-			        allowBlank: true,
-			        forceSelection: false,
-			        anchor: '95%'
-				},{
-		        	xtype: 'label',
-		        	text: 'Session Details (Critical Components)'
-				},{
-					xtype: 'tbspacer',
-					flex: 1
-				},{
-		            tooltip: 'Add Journal Session Details',
-		            text: 'Add/Edit Session Details',
-		            xtype: 'button',
-		            itemId: 'addSessionDetailsButton'
-	    	    },
-                { xtype: 'displayjournaldetails', autoScroll: true, anchor:'95% 50%' }
-				,{
                     xtype: 'textareafield',
-                    fieldLabel: 'Comment',
+                    fieldLabel: 'Comment (Optional)',
                     itemId: 'commentText',
                     anchor: '95%',
                     name: 'comment'
-                }],
+                },{
+			        xtype: 'fieldcontainer',
+			        fieldLabel: 'Journal Track (Optional)',
+			        labelWidth: 155,
+			        anchor: '95%',
+			        layout: 'hbox',
+			        items: [{
+						        xtype: 'combobox',
+						        itemId: 'journalTrackCombo',
+						        name: 'journalTrackId',
+						        fieldLabel: '',
+						        emptyText: 'Select One',
+						        store: me.journalTracksStore,
+						        valueField: 'id',
+						        displayField: 'name',
+						        mode: 'local',
+						        typeAhead: true,
+						        queryMode: 'local',
+						        allowBlank: true,
+						        forceSelection: false,
+						        flex: 1
+							},{
+								xtype: 'tbspacer',
+								width: 10
+							},{
+					            tooltip: 'Removes the assigned Journal Track and Session Details',
+					            text: 'Remove/Reset',
+					            xtype: 'button',
+					            itemId: 'removeJournalTrackButton',
+					            hidden: ((me.model.get('id') == "")?false : true)
+				    	    }]
+				},{
+			        xtype: 'fieldcontainer',
+			        fieldLabel: 'Session Details',
+			        labelWidth: 155,
+			        anchor: '95%',
+			        layout: 'hbox',
+			        items: [{
+					            tooltip: 'Add Journal Session Details',
+					            text: 'Add/Edit Session Details',
+					            xtype: 'button',
+					            itemId: 'addSessionDetailsButton'
+				    	    }]
+				},
+                { xtype: 'displayjournaldetails', autoScroll: true, anchor:'95% 50%' }
+				],
             
             dockedItems: [{
        		               xtype: 'toolbar',
@@ -14161,7 +14445,7 @@ Ext.define('Ssp.view.tools.journal.EditJournal',{
        		           }]
         });
 
-        return this.callParent(arguments);
+        return me.callParent(arguments);
     }	
 });
 Ext.define('Ssp.view.tools.journal.DisplayDetails', {
@@ -14293,7 +14577,7 @@ Ext.define('Ssp.view.tools.earlyalert.EarlyAlert', {
     		            text: 'Created Date',
     		            flex: 1,
     		            dataIndex: 'createdDate',
-    		            renderer : me.columnRendererUtils.renderCreatedByDateWithTime,
+    		            renderer : Ext.util.Format.dateRenderer('Y-m-d g:i A'),
     		            sortable: false
     		        },{
     		            text: 'Status',
@@ -14468,7 +14752,7 @@ Ext.define('Ssp.view.tools.earlyalert.EarlyAlertDetails',{
 	                anchor: '100%',
 	                name: 'createdDate',
 	                itemId: 'createdDateField',
-	                renderer: Ext.util.Format.dateRenderer('m/d/Y h:m A')
+	                renderer: Ext.util.Format.dateRenderer('Y-m-d g:i A')
 	            },{
                     xtype: 'displayfield',
                     fieldLabel: 'Course Name',
@@ -14491,7 +14775,7 @@ Ext.define('Ssp.view.tools.earlyalert.EarlyAlertDetails',{
                     fieldLabel: 'Closed Date',
                     anchor: '100%',
                     name: 'closedDate',
-                    renderer: Ext.util.Format.dateRenderer('m/d/Y h:m A')
+                    renderer: Ext.util.Format.dateRenderer('Y-m-d g:i A')
                 },{
                     xtype: 'displayfield',
                     fieldLabel: 'Campus',
@@ -14564,7 +14848,7 @@ Ext.define('Ssp.view.tools.earlyalert.EarlyAlertResponseDetails',{
 	                anchor: '100%',
 	                name: 'createdDate',
 	                itemId: 'createdDateField',
-	                renderer: Ext.util.Format.dateRenderer('m/d/Y h:m A')
+	                renderer: Ext.util.Format.dateRenderer('Y-m-d g:i A')
 	            },{
 	                xtype: 'displayfield',
 	                fieldLabel: 'Outcome',
@@ -16503,6 +16787,7 @@ Ext.define('Ssp.model.Person', {
     	me.set('lastName', jsonData.lastName);	
     	me.set('anticipatedStartTerm',jsonData.anticipatedStartTerm);
     	me.set('anticipatedStartYear',jsonData.anticipatedStartYear);
+    	me.set('homePhone', jsonData.homePhone);
     	me.set('cellPhone', jsonData.cellPhone);
     	me.set('workPhone', jsonData.workPhone);
     	me.set('addressLine1', jsonData.addressLine1);
@@ -16696,7 +16981,7 @@ Ext.define('Ssp.model.tool.earlyalert.PersonEarlyAlertTree', {
              {name:'earlyAlertSuggestionIds',type:'auto'},
              {name:'earlyAlertSuggestionOtherDescription',type:'string'},
              {name:'comment',type:'string'},
-             {name:'closedDate',type:'time'},
+             {name:'closedDate',type: 'date', dateFormat: 'time'},
              {name:'closedById',type:'string'},
              {name:'sendEmailToStudent', type:'boolean'},
              

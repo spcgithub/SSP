@@ -15,4 +15,7 @@ public interface WithTransaction {
 
 	@Transactional
 	<T> T withTransaction(Callable<T> work) throws Exception;
+
+	@Transactional
+	<T> T withTransactionAndUncheckedExceptions(Callable<T> work);
 }
