@@ -47,6 +47,7 @@ import net.sf.jasperreports.engine.export.JRXlsExporterParameter;
 import org.apache.commons.lang.StringUtils;
 import org.jasig.ssp.model.Person;
 import org.jasig.ssp.model.reference.ProgramStatus;
+import org.jasig.ssp.security.permissions.Permission;
 import org.jasig.ssp.service.CaseloadService;
 import org.jasig.ssp.service.ObjectNotFoundException;
 import org.jasig.ssp.service.PersonService;
@@ -61,6 +62,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.propertyeditors.CustomDateEditor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.InitBinder;
@@ -76,7 +78,6 @@ import com.google.common.collect.Maps;
  * <p>
  * Mapped to URI path <code>/1/report/Caseload</code>
  */
-
 @Controller
 @RequestMapping("/1/report/Caseload")
 public class CaseloadReportController extends AbstractBaseController {
@@ -116,6 +117,7 @@ public class CaseloadReportController extends AbstractBaseController {
 	
 	
 	@RequestMapping(method = RequestMethod.GET)
+	@PreAuthorize(Permission.SECURITY_REPORT_READ)
 	public @ResponseBody
 	void getCaseLoad(
 			final HttpServletResponse response,		
