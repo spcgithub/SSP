@@ -37,8 +37,12 @@ public class StudentType
 
 	private static final long serialVersionUID = -7875126705128856132L;
 
+	// Modified for SPC! They have a non-standard EAL type record in the db.
+	// Eventually, so this custom file can be eliminated for future upgrades,
+	// a data update to properly align the EAL_ID would need to happen with 
+	// SPC prod db.
 	public static final UUID EAL_ID = UUID
-			.fromString("b2d05939-5056-a51a-8004-d803265d2645");
+			.fromString("beb66b23-e591-11e1-869f-406c8f22c3ce");
 
 	private boolean requireInitialAppointment;
 

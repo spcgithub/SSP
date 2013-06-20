@@ -28,7 +28,7 @@ Ext.define('Ssp.model.Configuration', {
 		      */
              {name: 'syncStudentPersonalDataWithExternalData', 
     	      type: 'boolean', 
-    	      defaultValue: false
+    	      defaultValue: true
     	     },
     	     /*
     	      * Set this option to true to display the retrieveFromExternalDataButton on the Caseload
@@ -47,7 +47,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'coachSetFromExternalData', 
     	      type: 'boolean', 
-    	      defaultValue: false
+    	      defaultValue: true
     	     },
     	     /*
     	      * Set this option to true to lock editing of Student Type Assignments for records in the system.
@@ -65,14 +65,14 @@ Ext.define('Ssp.model.Configuration', {
              {
     	      name: 'studentIdAlias', 
     	      type: 'string', 
-    	      defaultValue: 'Tartan ID'
+    	      defaultValue: 'Student ID'
     	     },
     	     /*
     	      * Minimum data length for a studentId/schoolId in the application.
     	      */
     	     {name: 'studentIdMinValidationLength', 
     	      type: 'number', 
-    	      defaultValue: 3
+    	      defaultValue: 11
     	     },
     	     /*
     	      * Error message for a studentId/schoolId that exceeds the specified minimum validation length.
@@ -86,7 +86,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'studentIdMaxValidationLength', 
        	      type: 'number', 
-       	      defaultValue: 8
+       	      defaultValue: 11
        	     },
     	     /*
     	      * Error message for a studentId/schoolId that exceeds the specified maximum validation length.
@@ -108,7 +108,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'studentIdAllowableCharacters', 
           	  type: 'string', 
-          	  defaultValue: 'a-zA-Z0-9'
+          	  defaultValue: '0-9'
           	 },
     	     /*
     	      * Error message for a studentId/schoolId validation error.
@@ -147,7 +147,7 @@ Ext.define('Ssp.model.Configuration', {
     	     {
               name: 'coachFieldLabel', 
               type: 'string', 
-              defaultValue: 'Coach'
+              defaultValue: 'Student Success Coach'
             }],
              
      	constructor: function(){
