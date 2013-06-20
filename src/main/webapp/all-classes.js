@@ -2901,7 +2901,7 @@ Ext.define('Ssp.model.Configuration', {
 		      */
              {name: 'syncStudentPersonalDataWithExternalData', 
     	      type: 'boolean', 
-    	      defaultValue: false
+    	      defaultValue: true
     	     },
     	     /*
     	      * Set this option to true to display the retrieveFromExternalDataButton on the Caseload
@@ -2920,7 +2920,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'coachSetFromExternalData', 
     	      type: 'boolean', 
-    	      defaultValue: false
+    	      defaultValue: true
     	     },
     	     /*
     	      * Set this option to true to lock editing of Student Type Assignments for records in the system.
@@ -2938,14 +2938,14 @@ Ext.define('Ssp.model.Configuration', {
              {
     	      name: 'studentIdAlias', 
     	      type: 'string', 
-    	      defaultValue: 'Tartan ID'
+    	      defaultValue: 'Student ID'
     	     },
     	     /*
     	      * Minimum data length for a studentId/schoolId in the application.
     	      */
     	     {name: 'studentIdMinValidationLength', 
     	      type: 'number', 
-    	      defaultValue: 3
+    	      defaultValue: 11
     	     },
     	     /*
     	      * Error message for a studentId/schoolId that exceeds the specified minimum validation length.
@@ -2959,7 +2959,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'studentIdMaxValidationLength', 
        	      type: 'number', 
-       	      defaultValue: 8
+       	      defaultValue: 11
        	     },
     	     /*
     	      * Error message for a studentId/schoolId that exceeds the specified maximum validation length.
@@ -2981,7 +2981,7 @@ Ext.define('Ssp.model.Configuration', {
     	      */
     	     {name: 'studentIdAllowableCharacters', 
           	  type: 'string', 
-          	  defaultValue: 'a-zA-Z0-9'
+          	  defaultValue: '0-9'
           	 },
     	     /*
     	      * Error message for a studentId/schoolId validation error.
@@ -3020,7 +3020,7 @@ Ext.define('Ssp.model.Configuration', {
     	     {
               name: 'coachFieldLabel', 
               type: 'string', 
-              defaultValue: 'Coach'
+              defaultValue: 'Student Success Coach'
             }],
              
      	constructor: function(){
@@ -5148,7 +5148,6 @@ Ext.define('Ssp.util.Constants',{
     	 */
     	isRestrictedAdminItemId: function( id ){
     		var restrictedIds = [
-    		            Ssp.util.Constants.DISABILITY_AGENCY_OTHER_ID,
     		        	Ssp.util.Constants.EDUCATION_GOAL_OTHER_ID,
     		        	Ssp.util.Constants.EDUCATION_GOAL_MILITARY_ID,
     		        	Ssp.util.Constants.EDUCATION_GOAL_BACHELORS_DEGREE_ID,
@@ -5177,11 +5176,8 @@ Ext.define('Ssp.util.Constants',{
     	// If a value is assigned here then it will be used for the default
     	// confidentiality level for lists in the SSP portlet.
     	// default to EVERYONE: 'b3d077a7-4055-0510-7967-4a09f93a0357'
-    	DEFAULT_SYSTEM_CONFIDENTIALITY_LEVEL_ID: '',
-
-    	// DISABILITY AGENCY - ID VALUES RELATED TO ACCOMMODATION DISABILITY AGENCIES
-        DISABILITY_AGENCY_OTHER_ID: '224b03d9-90da-4f9c-8959-ea2e97661f40',
-    	   	
+    	DEFAULT_SYSTEM_CONFIDENTIALITY_LEVEL_ID: 'b3d077a7-4055-0510-7967-4a09f93a0357',
+    	
     	// EDUCATION GOALS - ID VALUES RELATED TO STUDENT INTAKE EDUCATION GOALS
         EDUCATION_GOAL_OTHER_ID: '78b54da7-fb19-4092-bb44-f60485678d6b',
         EDUCATION_GOAL_MILITARY_ID: '6c466885-d3f8-44d1-a301-62d6fe2d3553',
@@ -5224,13 +5220,12 @@ Ext.define('Ssp.util.Constants',{
         GRID_ITEM_EDIT_ICON_PATH: '/ssp/images/edit-icon.jpg',
         GRID_ITEM_CLOSE_ICON_PATH: '/ssp/images/close-icon.jpg',
         GRID_ITEM_MAIL_REPLY_ICON_PATH: '/ssp/images/mail-reply-icon.png',
-        DEFAULT_NO_STUDENT_PHOTO_URL:'/ssp/images/no-photo.jpg',
         
         // CAN BE APPLIED TO THE LABEL OF A FIELD TO SHOW A RED REQUIRED ASTERISK
         REQUIRED_ASTERISK_DISPLAY: '<span style="color: rgb(255, 0, 0); padding-left: 2px;">*</span>',
 
         // CAN BE APPLIED TO THE LABEL OF A FIELD OR CONTAINER TO ALTER THE LABEL STYLE
-        SSP_LABEL_STYLE: "color:#04408c;",        
+        SSP_LABEL_STYLE: "color:#04408c;",
         
         // CONFIGURES THE MESSAGE DISPLAYED NEXT TO THE SAVE BUTTON FOR TOOLS WHERE A SAVE IS ON A SINGLE SCREEN
         // FOR EXAMPLE: THIS FUNCTIONALITY IS APPLIED TO THE STUDENT INTAKE TOOL, ACTION PLAN STRENGTHS AND CONFIDENTIALITY DISCLOSURE AGREEMENT
@@ -29351,4 +29346,3 @@ Ext.define('Ssp.view.admin.forms.shg.SelfHelpGuidesDisplayAdmin', {
     	return me.callParent(arguments);
     }
 });
-
