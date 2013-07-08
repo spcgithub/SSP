@@ -158,7 +158,7 @@ public class ExternalPersonSyncTaskImpl implements ExternalPersonSyncTask {
 		LOGGER.info("END : External person sync.");
 	}
 
-	private Pair<Long, Long> syncWithPersonInTransaction(final SortingAndPaging sAndP) throws Exception {
+	protected Pair<Long, Long> syncWithPersonInTransaction(final SortingAndPaging sAndP) throws Exception {
 		return withTransaction.withTransaction(new Callable<Pair<Long, Long>>() {
 			@Override
 			public Pair<Long, Long> call() throws Exception {
@@ -167,7 +167,7 @@ public class ExternalPersonSyncTaskImpl implements ExternalPersonSyncTask {
 		});
 	}
 
-	private Pair<Long,Long> syncWithPerson(final SortingAndPaging sAndP) throws InterruptedException {
+	protected Pair<Long,Long> syncWithPerson(final SortingAndPaging sAndP) throws InterruptedException {
 
 		// Use InterruptedExceptions instead of manipulating return value b/c
 		// the return value actually means "total number of possible processable"
