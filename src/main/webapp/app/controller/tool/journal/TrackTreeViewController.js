@@ -162,14 +162,15 @@ Ext.define('Ssp.controller.tool.journal.TrackTreeViewController', {
                
                 var isChecked = child.get('checked');
                 var status = child.get('qtitle');
-                if (!isChecked && status == 'INACTIVE') {
-                    child.remove();
-                }
+                //
+//                if (!isChecked && status == 'INACTIVE') {
+//                    child.remove();
+//                }
             }
             children = node.childNodes;
-            if (node.get('qtitle') == 'INACTIVE' && !children.length) {
-                node.remove();
-            }
+//            if (node.get('qtitle') == 'INACTIVE' && !children.length) {
+//                node.remove();
+//            }
         }
     },
     

@@ -108,8 +108,8 @@ public class JournalStepServiceImpl extends
 				item.setObjectStatus(ObjectStatus.INACTIVE);
 
 				// we'll just return the last one
-				journalStepJournalStepDetail = journalStepJournalStepDetailDao
-						.save(item);
+				journalStepJournalStepDetailDao
+						.delete(item);
 			}
 		}
 

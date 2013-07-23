@@ -118,20 +118,18 @@ Ext.define('Ssp.controller.admin.AdminItemAssociationViewController', {
     	treeRequest.set('enableCheckedItems', true);
     	treeRequest.set('callbackFunc', me.onLoadComplete);
     	treeRequest.set('callbackScope', me);
-		
 		treeRequest.set('node', node);
-		
-    	me.treeUtils.getItemsWithParams( treeRequest , {limit: '-1'});
+    	me.treeUtils.getItemsWithParams( treeRequest , {limit: '-1', status: 'ALL'});
 		
     },
 
 	onLoadComplete: function( scope, node ){
 		var me=scope;
-		
-		if (node && node != "" && node.get('qtitle') == 'INACTIVE' && !node.hasChildNodes()) {
-			// remove the node
-			node.remove(true);
-		}
+//		
+//		if (node && node != "" && node.get('qtitle') == 'INACTIVE' && !node.hasChildNodes()) {
+//			// remove the node
+//			node.remove(true);
+//		}
 	},
 	
 	onLoadCompleteExpand: function( scope ){

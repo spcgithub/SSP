@@ -98,7 +98,7 @@ public class JournalTrackServiceImpl
 				item.setObjectStatus(ObjectStatus.INACTIVE);
 
 				// we'll just return the last one
-				journalTrackJournalStep = journalTrackJournalStepDao.save(item);
+				journalTrackJournalStepDao.delete(item);
 			}
 		}
 

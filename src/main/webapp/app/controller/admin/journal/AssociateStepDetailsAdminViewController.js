@@ -35,4 +35,5 @@ Ext.define('Ssp.controller.admin.journal.AssociateStepDetailsAdminViewController
 		//me.getParentItems();	
 		return me;
 	}
+
 });
